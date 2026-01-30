@@ -1,197 +1,330 @@
 <!doctype html>
-<html lang="ru">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Truth Serum — GenLayer Fact-Checker</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 920px; margin: 32px auto; padding: 0 16px; }
-      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-      input, textarea { width: 100%; padding: 10px 12px; font-size: 16px; }
-      button { padding: 10px 14px; font-size: 16px; cursor: pointer; }
-      .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin-top: 14px; }
-      .muted { color: #666; font-size: 14px; }
-      pre { white-space: pre-wrap; word-break: break-word; background: #fafafa; border: 1px solid #eee; padding: 12px; border-radius: 10px; }
-      .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 14px; }
-    </style>
-  </head>
-  <body>
-    <h1>Truth Serum</h1>
-    <p class="muted">
-      Вставь ссылку на новость/пост/статью → контракт в GenLayer подтянет страницу, найдёт исходящие ссылки и вынесет вердикт.
-    </p>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Truth Serum — Decentralized News Fact-Checker</title>
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; max-width: 980px; margin: 28px auto; padding: 0 16px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .card { border:1px solid #ddd; border-radius:14px; padding:14px; margin-top:14px; }
+    label { font-size: 13px; color:#555; display:block; margin: 10px 0 6px; }
+    input, textarea { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #ddd; border-radius: 10px; }
+    textarea { min-height: 120px; }
+    button { padding: 10px 14px; font-size: 15px; cursor:pointer; border-radius: 10px; border:1px solid #ddd; background:#fff; }
+    .muted { color:#666; font-size:13px; }
+    .pill { display:inline-block; padding:4px 10px; border:1px solid #ddd; border-radius:999px; font-size:13px; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; padding:12px; border-radius:12px; }
+    .ok { border-color:#0a0; }
+    .warn { border-color:#f90; }
+    .bad { border-color:#d00; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width: 860px){ .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Truth Serum</h1>
+  <p class="muted">
+    Paste a link (news / tweet / article). The contract fetches sources, checks claims, and returns:
+    <b>True / False / Misleading / Not enough data</b> + explanation + citations.
+  </p>
 
-    <div class="card">
-      <div class="row">
-        <button id="btnConnect">Подключить кошелёк</button>
-        <span id="wallet" class="muted">не подключен</span>
-      </div>
-
-      <div style="height: 10px"></div>
-
-      <label class="muted">URL</label>
-      <input id="url" placeholder="https://..." />
-
-      <div style="height: 10px"></div>
-
-      <div class="row">
-        <button id="btnVerify">Проверить (on-chain)</button>
-        <button id="btnRead">Прочитать результат</button>
-        <span id="status" class="muted"></span>
-      </div>
+  <div class="card">
+    <div class="row">
+      <button id="btnConnect">Connect Wallet</button>
+      <button id="btnAddSwitch">Add / Switch to GenLayer StudioNet</button>
+      <span id="wallet" class="muted">Not connected</span>
+      <span class="pill" id="chainPill">Chain: —</span>
+    </div>
+    <div class="muted" style="margin-top:8px;">
+      If you see <b>eth_fillTransaction</b> errors, you are on the wrong network RPC.
+      Click “Add / Switch to GenLayer StudioNet”.
     </div>
 
-    <div id="out" class="card" style="display:none;">
-      <div class="row" style="justify-content: space-between;">
-        <div>
-          <span class="muted">Вердикт:</span>
-          <span id="verdict" class="badge"></span>
+    <div class="grid" style="margin-top:10px;">
+      <div>
+        <label>Link to fact-check</label>
+        <input id="url" placeholder="https://..." />
+
+        <label>Optional context (what do you think is being claimed?)</label>
+        <textarea id="context" placeholder="Example: 'This tweet claims X happened on Y date...'"></textarea>
+
+        <div class="row" style="margin-top:10px;">
+          <button id="btnCheck">Run Fact Check (on-chain)</button>
+          <button id="btnLoadTx">Load by Tx Hash</button>
+          <input id="txHash" placeholder="0x..." style="max-width:420px;" />
         </div>
-        <div class="muted" id="tx"></div>
+
+        <div class="muted" id="status" style="margin-top:8px;">—</div>
       </div>
 
-      <h3>Пояснение</h3>
-      <div id="explanation"></div>
+      <div>
+        <div class="card" style="margin-top:0;">
+          <div class="row" style="justify-content:space-between;">
+            <span class="pill" id="verdictPill">Verdict: —</span>
+            <span class="pill" id="confidencePill">Confidence: —</span>
+          </div>
 
-      <h3>Источники</h3>
-      <div id="sources"></div>
+          <h3 style="margin:12px 0 6px;">Explanation</h3>
+          <div id="explanation" class="muted">—</div>
 
-      <h3>Raw JSON</h3>
-      <pre id="raw"></pre>
+          <h3 style="margin:12px 0 6px;">Sources</h3>
+          <ul id="sources" class="muted" style="margin-top:6px;"></ul>
+
+          <details style="margin-top:10px;">
+            <summary>Raw JSON (contract result)</summary>
+            <pre id="rawJson">—</pre>
+          </details>
+
+          <details style="margin-top:10px;">
+            <summary>Debug: Transaction object</summary>
+            <pre id="txDebug">—</pre>
+          </details>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <script type="module">
-      // NOTE: easiest "no-build" imports via esm.sh
-      import { createClient } from "https://esm.sh/genlayer-js";
-      import { studionet } from "https://esm.sh/genlayer-js/chains";
-      import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
+  <script type="module">
+    import { createClient } from "https://esm.sh/genlayer-js";
+    import { studionet } from "https://esm.sh/genlayer-js/chains";
+    import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
-      const CONTRACT_ADDRESS = "0x2715f59C9E8AD07c9C788c7f9e3d4e9DccaB6BcD";
+    // TODO: set these
+    const CONTRACT_ADDRESS = "0x2715f59C9E8AD07c9C788c7f9e3d4e9DccaB6BcD";
+    const METHOD_NAME = "factcheck"; // <-- CHANGE to your contract write method name
 
-      let accountAddress = null;
-      let client = null;
+    // GenLayer StudioNet (per docs/community)
+    const GENLAYER_CHAIN_ID_DEC = 61999;
+    const GENLAYER_CHAIN_ID_HEX = "0xF22F"; // 61999
+    const GENLAYER_RPC = "https://studio.genlayer.com/api";
 
-      const el = (id) => document.getElementById(id);
-      const setStatus = (s) => (el("status").textContent = s);
+    let accountAddress = null;
+    let client = null;
 
-      function renderResult(jsonStr, txHash = "") {
-        el("out").style.display = "block";
-        el("tx").textContent = txHash ? `tx: ${txHash}` : "";
-        el("raw").textContent = jsonStr;
+    const el = (id) => document.getElementById(id);
+    const setStatus = (s) => el("status").textContent = s;
 
-        let obj;
-        try { obj = JSON.parse(jsonStr); } catch {
-          el("verdict").textContent = "Parse error";
-          el("explanation").textContent = "";
-          el("sources").textContent = "";
-          return;
-        }
+    function setVerdictUI(verdict, confidence, explanation, sources, raw) {
+      el("verdictPill").textContent = `Verdict: ${verdict ?? "—"}`;
+      el("confidencePill").textContent = `Confidence: ${confidence ?? "—"}`;
+      el("explanation").textContent = explanation ?? "—";
+      el("rawJson").textContent = raw ?? "—";
 
-        el("verdict").textContent = obj.verdict || "";
-        el("explanation").textContent = obj.explanation || "";
+      const ul = el("sources");
+      ul.innerHTML = "";
+      (sources ?? []).forEach((s) => {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = s;
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        a.textContent = s;
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
 
-        const src = Array.isArray(obj.sources) ? obj.sources : [];
-        el("sources").innerHTML = src.length
-          ? "<ul>" + src.map(s => {
-              const u = (s && s.url) ? s.url : "";
-              const note = (s && s.note) ? s.note : "";
-              const safeU = u.replaceAll('"', "&quot;");
-              return `<li><a href="${safeU}" target="_blank" rel="noreferrer">${u}</a> <span class="muted">— ${note}</span></li>`;
-            }).join("") + "</ul>"
-          : "<span class='muted'>нет</span>";
+      // border hint
+      const v = (verdict || "").toLowerCase();
+      const pill = el("verdictPill");
+      pill.classList.remove("ok","warn","bad");
+      if (v === "true") pill.classList.add("ok");
+      else if (v === "false") pill.classList.add("bad");
+      else if (v === "misleading") pill.classList.add("warn");
+    }
+
+    async function ensureClient() {
+      if (!client) {
+        client = createClient({
+          chain: studionet,
+          account: accountAddress ?? undefined,
+          // endpoint is for the GenLayer RPC calls:
+          endpoint: GENLAYER_RPC,
+        });
+        await client.initializeConsensusSmartContract();
+      }
+      return client;
+    }
+
+    async function refreshChainPill() {
+      try {
+        if (!window.ethereum) return;
+        const chainId = await window.ethereum.request({ method: "eth_chainId" });
+        el("chainPill").textContent = `Chain: ${chainId}`;
+      } catch {
+        el("chainPill").textContent = "Chain: —";
+      }
+    }
+
+    async function addOrSwitchGenLayerNetwork() {
+      if (!window.ethereum) {
+        alert("Please install MetaMask (or a compatible EIP-1193 wallet).");
+        return;
       }
 
-      async function ensureClient() {
-        if (!client) {
-          client = createClient({
-            chain: studionet,
-            // For MetaMask-style signing, the SDK docs say you can provide just the address.
-            // The wallet handles signing.
-            account: accountAddress ?? undefined,
-          });
-          await client.initializeConsensusSmartContract();
-        }
-        return client;
+      // Try switch, if not added then add it
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: GENLAYER_CHAIN_ID_HEX }],
+        });
+      } catch (switchErr) {
+        // Add chain
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: GENLAYER_CHAIN_ID_HEX,
+            chainName: "GenLayer StudioNet",
+            nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
+            rpcUrls: [GENLAYER_RPC],
+          }],
+        });
+        // and switch again
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: GENLAYER_CHAIN_ID_HEX }],
+        });
       }
 
-      el("btnConnect").onclick = async () => {
-        if (!window.ethereum) {
-          alert("Нужен кошелёк (например, MetaMask).");
-          return;
-        }
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        accountAddress = accounts?.[0] || null;
-        el("wallet").textContent = accountAddress ? accountAddress : "не подключен";
+      await refreshChainPill();
+      setStatus("Switched to GenLayer StudioNet.");
+    }
 
-        // rebuild client with account
-        client = null;
-        await ensureClient();
-        setStatus("Кошелёк подключен");
-      };
+    el("btnAddSwitch").onclick = addOrSwitchGenLayerNetwork;
 
-      el("btnVerify").onclick = async () => {
-        const url = el("url").value.trim();
-        if (!url) return;
+    // Connect
+    el("btnConnect").onclick = async () => {
+      if (!window.ethereum) {
+        alert("Please install MetaMask.");
+        return;
+      }
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      accountAddress = accounts?.[0] || null;
+      el("wallet").textContent = accountAddress ? accountAddress : "Not connected";
+      client = null;
+      await refreshChainPill();
 
-        setStatus("Отправляю транзакцию verify(...) ...");
-        const c = await ensureClient();
+      // gentle guard
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (chainId !== GENLAYER_CHAIN_ID_HEX) {
+        setStatus("Connected, but you are NOT on GenLayer StudioNet. Click 'Add / Switch' to fix RPC errors.");
+      } else {
+        setStatus("Wallet connected on GenLayer StudioNet.");
+      }
 
-        try {
-          const txHash = await c.writeContract({
-            address: CONTRACT_ADDRESS,
-            functionName: "verify",
-            args: [url],
-            value: 0n,
-          });
+      await ensureClient();
+    };
 
-          setStatus("Жду ACCEPTED ...");
-          await c.waitForTransactionReceipt({
-            hash: txHash,
-            status: TransactionStatus.ACCEPTED,
-            retries: 80,
-            interval: 5000,
-          });
+    // ---- Core: submit factcheck tx ----
+    el("btnCheck").onclick = async () => {
+      const url = el("url").value.trim();
+      const context = el("context").value.trim();
 
-          setStatus("Готово. Читаю результат ...");
-          const res = await c.readContract({
-            address: CONTRACT_ADDRESS,
-            functionName: "get",
-            args: [url],
-          });
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        alert("Please provide a valid URL starting with http:// or https://");
+        return;
+      }
 
-          renderResult(res, txHash);
-          setStatus("OK");
-        } catch (e) {
-          console.error(e);
-          setStatus("Ошибка: " + (e?.message || String(e)));
-        }
-      };
+      if (!accountAddress) {
+        alert("Connect wallet first.");
+        return;
+      }
 
-      el("btnRead").onclick = async () => {
-        const url = el("url").value.trim();
-        if (!url) return;
+      // network guard
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (chainId !== GENLAYER_CHAIN_ID_HEX) {
+        alert("Wrong network. Click 'Add / Switch to GenLayer StudioNet' first.");
+        return;
+      }
 
-        setStatus("Читаю get(url) ...");
-        const c = await ensureClient();
+      setStatus("Submitting transaction…");
+      const c = await ensureClient();
 
-        try {
-          const res = await c.readContract({
-            address: CONTRACT_ADDRESS,
-            functionName: "get",
-            args: [url],
-          });
+      try {
+        // IMPORTANT: Adjust args if your contract signature differs.
+        // Common pattern: factcheck(url, context)
+        const txHash = await c.writeContract({
+          address: CONTRACT_ADDRESS,
+          functionName: METHOD_NAME,
+          args: [url, context],
+          value: 0n,
+        });
 
-          if (!res) {
-            setStatus("Пусто (ещё не проверяли этот URL)");
-            return;
-          }
-          renderResult(res);
-          setStatus("OK");
-        } catch (e) {
-          console.error(e);
-          setStatus("Ошибка: " + (e?.message || String(e)));
-        }
-      };
-    </script>
-  </body>
+        el("txHash").value = txHash;
+        setStatus("Waiting for FINALIZED… (recommended for stable reads)");
+
+        // Wait for FINALIZED to avoid “empty/partial state” reads
+        await c.waitForTransactionReceipt({
+          hash: txHash,
+          status: TransactionStatus.FINALIZED,
+          retries: 200,
+          interval: 3000,
+        });
+
+        setStatus("Transaction FINALIZED. Loading tx details…");
+        await loadByTxHash(txHash);
+
+        setStatus("Done.");
+      } catch (e) {
+        console.error(e);
+        setStatus("Error: " + (e?.message || String(e)));
+      }
+    };
+
+    // ---- Load tx output ----
+    async function loadByTxHash(txHash) {
+      const c = await ensureClient();
+      setStatus("Fetching transaction object…");
+
+      // getTransaction is part of GenLayerJS (debug-friendly)
+      const txObj = await c.getTransaction({ hash: txHash });
+      el("txDebug").textContent = JSON.stringify(txObj, null, 2);
+
+      // Try extracting a JSON result from known places:
+      // Some environments keep output under txObj.data.output / txObj.data.result / txObj.data.return_value etc.
+      const candidates = [
+        txObj?.data?.output,
+        txObj?.data?.result,
+        txObj?.data?.return_value,
+        txObj?.data?.receipt?.output,
+        txObj?.output,
+        txObj?.result,
+      ].filter((x) => typeof x === "string" && x.trim().length);
+
+      const raw = candidates[0] || "";
+      el("rawJson").textContent = raw || "(no string output found in tx object — check txDebug)";
+
+      // Parse if possible
+      try {
+        const parsed = JSON.parse(raw);
+        const verdict = parsed.verdict || parsed.label || parsed.result || "—";
+        const confidence = parsed.confidence ?? parsed.score ?? "—";
+        const explanation = parsed.explanation || parsed.reasoning || parsed.summary || "—";
+        const sources = parsed.sources || parsed.citations || parsed.refs || [];
+        setVerdictUI(verdict, confidence, explanation, Array.isArray(sources) ? sources : [], raw);
+      } catch {
+        // keep raw, show parse error clearly
+        setVerdictUI("Parse error", "—", "Contract output was not valid JSON. See Raw JSON + Tx Debug.", [], raw);
+      }
+    }
+
+    el("btnLoadTx").onclick = async () => {
+      const txHash = el("txHash").value.trim();
+      if (!txHash.startsWith("0x") || txHash.length < 10) {
+        alert("Paste a valid transaction hash.");
+        return;
+      }
+      try {
+        await loadByTxHash(txHash);
+        setStatus("Loaded from tx hash.");
+      } catch (e) {
+        console.error(e);
+        setStatus("Error: " + (e?.message || String(e)));
+      }
+    };
+
+    // init chain pill
+    try { await refreshChainPill(); } catch {}
+  </script>
+</body>
 </html>
