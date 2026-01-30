@@ -3,266 +3,326 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Truth Serum — Decentralized News Fact-Checker</title>
+  <title>Truth Serum — Decentralized Fact Checker</title>
   <style>
     body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; max-width: 980px; margin: 28px auto; padding: 0 16px; }
     .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
     .card { border:1px solid #ddd; border-radius:14px; padding:14px; margin-top:14px; }
     label { font-size: 13px; color:#555; display:block; margin: 10px 0 6px; }
     input, textarea { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #ddd; border-radius: 10px; }
-    textarea { min-height: 120px; }
+    textarea { min-height: 110px; }
     button { padding: 10px 14px; font-size: 15px; cursor:pointer; border-radius: 10px; border:1px solid #ddd; background:#fff; }
     .muted { color:#666; font-size:13px; }
     .pill { display:inline-block; padding:4px 10px; border:1px solid #ddd; border-radius:999px; font-size:13px; }
     pre { white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; padding:12px; border-radius:12px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width: 860px){ .grid { grid-template-columns: 1fr; } }
     .ok { border-color:#0a0; }
     .warn { border-color:#f90; }
     .bad { border-color:#d00; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-    @media (max-width: 860px){ .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <h1>Truth Serum</h1>
   <p class="muted">
-    Paste a link (news / tweet / article). The contract fetches sources, checks claims, and returns:
-    <b>True / False / Misleading / Not enough data</b> + explanation + citations.
+    Paste a link (news/tweet/article). The contract fetches the page, extracts candidate sources,
+    and returns: <b>True / False / Misleading / Not enough data</b> + explanation + sources.
   </p>
 
   <div class="card">
-    <div class="row">
-      <button id="btnConnect">Connect Wallet</button>
-      <button id="btnAddSwitch">Add / Switch to GenLayer StudioNet</button>
-      <span id="wallet" class="muted">Not connected</span>
-      <span class="pill" id="chainPill">Chain: —</span>
-    </div>
-    <div class="muted" style="margin-top:8px;">
-      If you see <b>eth_fillTransaction</b> errors, you are on the wrong network RPC.
-      Click “Add / Switch to GenLayer StudioNet”.
-    </div>
+    <h3 style="margin:0 0 6px;">Wallet (Burner)</h3>
+    <p class="muted" style="margin-top:0;">
+      This demo uses a local signing wallet via GenLayerJS <code>createAccount()</code>.
+      (MetaMask integration is still under development in the SDK.) :contentReference[oaicite:4]{index=4}
+    </p>
 
-    <div class="grid" style="margin-top:10px;">
+    <div class="grid">
       <div>
-        <label>Link to fact-check</label>
-        <input id="url" placeholder="https://..." />
-
-        <label>Optional context (what do you think is being claimed?)</label>
-        <textarea id="context" placeholder="Example: 'This tweet claims X happened on Y date...'"></textarea>
-
-        <div class="row" style="margin-top:10px;">
-          <button id="btnCheck">Run Fact Check (on-chain)</button>
-          <button id="btnLoadTx">Load by Tx Hash</button>
-          <input id="txHash" placeholder="0x..." style="max-width:420px;" />
+        <div class="row">
+          <button id="btnCreate">Create New Wallet</button>
+          <button id="btnForget">Forget Wallet</button>
         </div>
 
-        <div class="muted" id="status" style="margin-top:8px;">—</div>
+        <label>Private key (stored in localStorage!)</label>
+        <input id="pk" placeholder="0x..." />
+
+        <div class="row" style="margin-top:10px;">
+          <button id="btnImport">Import / Use This Key</button>
+          <span class="muted" id="walletStatus">No wallet loaded</span>
+        </div>
+
+        <label>Address</label>
+        <input id="addr" readonly />
       </div>
 
       <div>
         <div class="card" style="margin-top:0;">
-          <div class="row" style="justify-content:space-between;">
-            <span class="pill" id="verdictPill">Verdict: —</span>
-            <span class="pill" id="confidencePill">Confidence: —</span>
+          <div class="muted">
+            RPC endpoint (StudioNet):
+            <div><code>https://studio.genlayer.com/api</code></div>
+            <div style="margin-top:6px;">
+              If transactions fail with “insufficient funds”, send some test GEN to your address on StudioNet.
+            </div>
           </div>
-
-          <h3 style="margin:12px 0 6px;">Explanation</h3>
-          <div id="explanation" class="muted">—</div>
-
-          <h3 style="margin:12px 0 6px;">Sources</h3>
-          <ul id="sources" class="muted" style="margin-top:6px;"></ul>
-
-          <details style="margin-top:10px;">
-            <summary>Raw JSON (contract result)</summary>
-            <pre id="rawJson">—</pre>
-          </details>
-
-          <details style="margin-top:10px;">
-            <summary>Debug: Transaction object</summary>
-            <pre id="txDebug">—</pre>
-          </details>
         </div>
       </div>
     </div>
   </div>
 
+  <div class="card">
+    <h3 style="margin:0 0 6px;">Run a Fact Check</h3>
+
+    <label>URL</label>
+    <input id="url" placeholder="https://..." />
+
+    <div class="row" style="margin-top:10px;">
+      <button id="btnVerify">Verify (on-chain)</button>
+      <button id="btnRead">Read stored result</button>
+      <button id="btnLast">Get last result</button>
+    </div>
+
+    <div class="muted" id="status" style="margin-top:10px;">—</div>
+
+    <label style="margin-top:12px;">Tx hash</label>
+    <input id="txhash" placeholder="0x..." />
+    <div class="row" style="margin-top:10px;">
+      <button id="btnLoadTx">Load tx debug</button>
+    </div>
+  </div>
+
+  <div class="card" id="out" style="display:none;">
+    <div class="row" style="justify-content:space-between;">
+      <div class="row">
+        <span class="pill" id="verdictPill">Verdict: —</span>
+      </div>
+      <span class="muted" id="txLine"></span>
+    </div>
+
+    <h3 style="margin:12px 0 6px;">Explanation</h3>
+    <div id="explanation" class="muted">—</div>
+
+    <h3 style="margin:12px 0 6px;">Sources</h3>
+    <div id="sources" class="muted">—</div>
+
+    <h3 style="margin:12px 0 6px;">Key claims</h3>
+    <div id="claims" class="muted">—</div>
+
+    <details style="margin-top:10px;">
+      <summary>Raw JSON (contract return)</summary>
+      <pre id="raw">—</pre>
+    </details>
+
+    <details style="margin-top:10px;">
+      <summary>Debug: Transaction object</summary>
+      <pre id="txDebug">—</pre>
+    </details>
+  </div>
+
   <script type="module">
-    import { createClient } from "https://esm.sh/genlayer-js";
+    import { createClient, createAccount, generatePrivateKey } from "https://esm.sh/genlayer-js";
     import { studionet } from "https://esm.sh/genlayer-js/chains";
     import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
-    // TODO: set these
+    // === SET THIS ===
     const CONTRACT_ADDRESS = "0x2715f59C9E8AD07c9C788c7f9e3d4e9DccaB6BcD";
-    const METHOD_NAME = "factcheck"; // <-- CHANGE to your contract write method name
 
-    // GenLayer StudioNet (per docs/community)
-    const GENLAYER_CHAIN_ID_DEC = 61999;
-    const GENLAYER_CHAIN_ID_HEX = "0xF22F"; // 61999
-    const GENLAYER_RPC = "https://studio.genlayer.com/api";
-
-    let accountAddress = null;
-    let client = null;
+    const RPC_ENDPOINT = "https://studio.genlayer.com/api";
 
     const el = (id) => document.getElementById(id);
     const setStatus = (s) => el("status").textContent = s;
 
-    function setVerdictUI(verdict, confidence, explanation, sources, raw) {
-      el("verdictPill").textContent = `Verdict: ${verdict ?? "—"}`;
-      el("confidencePill").textContent = `Confidence: ${confidence ?? "—"}`;
-      el("explanation").textContent = explanation ?? "—";
-      el("rawJson").textContent = raw ?? "—";
+    let account = null;
+    let client = null;
 
-      const ul = el("sources");
-      ul.innerHTML = "";
-      (sources ?? []).forEach((s) => {
-        const li = document.createElement("li");
-        const a = document.createElement("a");
-        a.href = s;
-        a.target = "_blank";
-        a.rel = "noreferrer";
-        a.textContent = s;
-        li.appendChild(a);
-        ul.appendChild(li);
-      });
-
-      // border hint
-      const v = (verdict || "").toLowerCase();
-      const pill = el("verdictPill");
-      pill.classList.remove("ok","warn","bad");
-      if (v === "true") pill.classList.add("ok");
-      else if (v === "false") pill.classList.add("bad");
-      else if (v === "misleading") pill.classList.add("warn");
-    }
+    function savePk(pk) { localStorage.setItem("truthserum_pk", pk); }
+    function loadPk() { return localStorage.getItem("truthserum_pk"); }
+    function clearPk() { localStorage.removeItem("truthserum_pk"); }
 
     async function ensureClient() {
+      if (!account) throw new Error("No wallet loaded");
       if (!client) {
+        // createClient supports custom endpoint & signing account :contentReference[oaicite:5]{index=5}
         client = createClient({
           chain: studionet,
-          account: accountAddress ?? undefined,
-          // endpoint is for the GenLayer RPC calls:
-          endpoint: GENLAYER_RPC,
+          endpoint: RPC_ENDPOINT,
+          account,
         });
         await client.initializeConsensusSmartContract();
       }
       return client;
     }
 
-    async function refreshChainPill() {
-      try {
-        if (!window.ethereum) return;
-        const chainId = await window.ethereum.request({ method: "eth_chainId" });
-        el("chainPill").textContent = `Chain: ${chainId}`;
-      } catch {
-        el("chainPill").textContent = "Chain: —";
-      }
+    function showResult(obj, raw, txHash = "") {
+      el("out").style.display = "block";
+      el("raw").textContent = raw || "—";
+      el("txLine").textContent = txHash ? `tx: ${txHash}` : "";
+
+      const verdict = obj?.verdict ?? "—";
+      el("verdictPill").textContent = `Verdict: ${verdict}`;
+
+      // color hint
+      el("verdictPill").classList.remove("ok","warn","bad");
+      const v = String(verdict).toLowerCase();
+      if (v === "true") el("verdictPill").classList.add("ok");
+      else if (v === "false") el("verdictPill").classList.add("bad");
+      else if (v === "misleading") el("verdictPill").classList.add("warn");
+
+      el("explanation").textContent = obj?.explanation ?? "—";
+
+      const sources = Array.isArray(obj?.sources) ? obj.sources : [];
+      el("sources").innerHTML = sources.length
+        ? "<ul>" + sources.map(s => {
+            const u = (s && s.url) ? s.url : "";
+            const note = (s && s.note) ? s.note : "";
+            const safeU = u.replaceAll('"', "&quot;");
+            return `<li><a href="${safeU}" target="_blank" rel="noreferrer">${u}</a> <span class="muted">— ${note}</span></li>`;
+          }).join("") + "</ul>"
+        : "<span class='muted'>(no sources)</span>";
+
+      const claims = Array.isArray(obj?.key_claims) ? obj.key_claims : [];
+      el("claims").innerHTML = claims.length
+        ? "<ol>" + claims.map(c => `<li>${String(c)}</li>`).join("") + "</ol>"
+        : "<span class='muted'>(no claims)</span>";
     }
 
-    async function addOrSwitchGenLayerNetwork() {
-      if (!window.ethereum) {
-        alert("Please install MetaMask (or a compatible EIP-1193 wallet).");
-        return;
-      }
-
-      // Try switch, if not added then add it
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: GENLAYER_CHAIN_ID_HEX }],
-        });
-      } catch (switchErr) {
-        // Add chain
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: GENLAYER_CHAIN_ID_HEX,
-            chainName: "GenLayer StudioNet",
-            nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-            rpcUrls: [GENLAYER_RPC],
-          }],
-        });
-        // and switch again
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: GENLAYER_CHAIN_ID_HEX }],
-        });
-      }
-
-      await refreshChainPill();
-      setStatus("Switched to GenLayer StudioNet.");
+    function showParseError(raw, txHash = "") {
+      el("out").style.display = "block";
+      el("verdictPill").textContent = "Verdict: Parse error";
+      el("explanation").textContent = "Contract output was not valid JSON. See Raw JSON below.";
+      el("sources").textContent = "—";
+      el("claims").textContent = "—";
+      el("raw").textContent = raw || "(empty)";
+      el("txLine").textContent = txHash ? `tx: ${txHash}` : "";
     }
 
-    el("btnAddSwitch").onclick = addOrSwitchGenLayerNetwork;
+    // ---- Wallet UI ----
+    function refreshWalletUI() {
+      el("addr").value = account?.address || "";
+      el("walletStatus").textContent = account ? "Wallet loaded" : "No wallet loaded";
+    }
 
-    // Connect
-    el("btnConnect").onclick = async () => {
-      if (!window.ethereum) {
-        alert("Please install MetaMask.");
-        return;
-      }
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      accountAddress = accounts?.[0] || null;
-      el("wallet").textContent = accountAddress ? accountAddress : "Not connected";
+    el("btnCreate").onclick = () => {
+      const pk = generatePrivateKey();
+      el("pk").value = pk;
+      savePk(pk);
+      account = createAccount(pk);
       client = null;
-      await refreshChainPill();
-
-      // gentle guard
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      if (chainId !== GENLAYER_CHAIN_ID_HEX) {
-        setStatus("Connected, but you are NOT on GenLayer StudioNet. Click 'Add / Switch' to fix RPC errors.");
-      } else {
-        setStatus("Wallet connected on GenLayer StudioNet.");
-      }
-
-      await ensureClient();
+      refreshWalletUI();
+      setStatus("New wallet created and stored in localStorage.");
     };
 
-    // ---- Core: submit factcheck tx ----
-    el("btnCheck").onclick = async () => {
+    el("btnImport").onclick = () => {
+      const pk = el("pk").value.trim();
+      if (!pk.startsWith("0x") || pk.length < 10) {
+        alert("Please paste a valid hex private key starting with 0x");
+        return;
+      }
+      savePk(pk);
+      account = createAccount(pk);
+      client = null;
+      refreshWalletUI();
+      setStatus("Wallet imported and stored in localStorage.");
+    };
+
+    el("btnForget").onclick = () => {
+      clearPk();
+      account = null;
+      client = null;
+      refreshWalletUI();
+      setStatus("Wallet cleared.");
+    };
+
+    // Auto-load saved wallet
+    (() => {
+      const pk = loadPk();
+      if (pk) {
+        el("pk").value = pk;
+        account = createAccount(pk);
+        refreshWalletUI();
+        setStatus("Loaded wallet from localStorage.");
+      }
+    })();
+
+    // ---- Contract actions ----
+    async function readAndRenderForUrl(url, txHash = "") {
+      const c = await ensureClient();
+
+      // 1) Try get(url)
+      const raw = await c.readContract({
+        address: CONTRACT_ADDRESS,
+        functionName: "get",
+        args: [url],
+      });
+
+      if (raw && String(raw).trim().length) {
+        try {
+          const obj = JSON.parse(raw);
+          showResult(obj, raw, txHash);
+          return;
+        } catch {
+          showParseError(raw, txHash);
+          return;
+        }
+      }
+
+      // 2) Fallback: get_last()
+      const last = await c.readContract({
+        address: CONTRACT_ADDRESS,
+        functionName: "get_last",
+        args: [],
+      });
+
+      const lastRaw = last?.result || "";
+      if (lastRaw && String(lastRaw).trim().length) {
+        try {
+          const obj = JSON.parse(lastRaw);
+          showResult(obj, lastRaw, txHash);
+          return;
+        } catch {
+          showParseError(lastRaw, txHash);
+          return;
+        }
+      }
+
+      showParseError("(empty result from get(url) and get_last())", txHash);
+    }
+
+    el("btnVerify").onclick = async () => {
       const url = el("url").value.trim();
-      const context = el("context").value.trim();
-
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        alert("Please provide a valid URL starting with http:// or https://");
+        alert("Please enter a valid URL starting with http:// or https://");
+        return;
+      }
+      if (!CONTRACT_ADDRESS.startsWith("0x")) {
+        alert("Set CONTRACT_ADDRESS in the HTML file.");
         return;
       }
 
-      if (!accountAddress) {
-        alert("Connect wallet first.");
-        return;
-      }
-
-      // network guard
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      if (chainId !== GENLAYER_CHAIN_ID_HEX) {
-        alert("Wrong network. Click 'Add / Switch to GenLayer StudioNet' first.");
-        return;
-      }
-
-      setStatus("Submitting transaction…");
+      setStatus("Submitting verify(url) transaction…");
       const c = await ensureClient();
 
       try {
-        // IMPORTANT: Adjust args if your contract signature differs.
-        // Common pattern: factcheck(url, context)
+        // Your contract signature is verify(url: str) -> str (ONE argument)
         const txHash = await c.writeContract({
           address: CONTRACT_ADDRESS,
-          functionName: METHOD_NAME,
-          args: [url, context],
+          functionName: "verify",
+          args: [url],
           value: 0n,
         });
 
-        el("txHash").value = txHash;
-        setStatus("Waiting for FINALIZED… (recommended for stable reads)");
+        el("txhash").value = txHash;
 
-        // Wait for FINALIZED to avoid “empty/partial state” reads
+        setStatus("Waiting for FINALIZED…");
         await c.waitForTransactionReceipt({
           hash: txHash,
           status: TransactionStatus.FINALIZED,
           retries: 200,
           interval: 3000,
+          fullTransaction: false,
         });
 
-        setStatus("Transaction FINALIZED. Loading tx details…");
-        await loadByTxHash(txHash);
+        setStatus("FINALIZED. Reading stored result…");
+        await readAndRenderForUrl(url, txHash);
 
         setStatus("Done.");
       } catch (e) {
@@ -271,60 +331,62 @@
       }
     };
 
-    // ---- Load tx output ----
-    async function loadByTxHash(txHash) {
-      const c = await ensureClient();
-      setStatus("Fetching transaction object…");
-
-      // getTransaction is part of GenLayerJS (debug-friendly)
-      const txObj = await c.getTransaction({ hash: txHash });
-      el("txDebug").textContent = JSON.stringify(txObj, null, 2);
-
-      // Try extracting a JSON result from known places:
-      // Some environments keep output under txObj.data.output / txObj.data.result / txObj.data.return_value etc.
-      const candidates = [
-        txObj?.data?.output,
-        txObj?.data?.result,
-        txObj?.data?.return_value,
-        txObj?.data?.receipt?.output,
-        txObj?.output,
-        txObj?.result,
-      ].filter((x) => typeof x === "string" && x.trim().length);
-
-      const raw = candidates[0] || "";
-      el("rawJson").textContent = raw || "(no string output found in tx object — check txDebug)";
-
-      // Parse if possible
+    el("btnRead").onclick = async () => {
+      const url = el("url").value.trim();
+      if (!url) return alert("Enter a URL first.");
+      setStatus("Reading get(url)…");
       try {
-        const parsed = JSON.parse(raw);
-        const verdict = parsed.verdict || parsed.label || parsed.result || "—";
-        const confidence = parsed.confidence ?? parsed.score ?? "—";
-        const explanation = parsed.explanation || parsed.reasoning || parsed.summary || "—";
-        const sources = parsed.sources || parsed.citations || parsed.refs || [];
-        setVerdictUI(verdict, confidence, explanation, Array.isArray(sources) ? sources : [], raw);
-      } catch {
-        // keep raw, show parse error clearly
-        setVerdictUI("Parse error", "—", "Contract output was not valid JSON. See Raw JSON + Tx Debug.", [], raw);
-      }
-    }
-
-    el("btnLoadTx").onclick = async () => {
-      const txHash = el("txHash").value.trim();
-      if (!txHash.startsWith("0x") || txHash.length < 10) {
-        alert("Paste a valid transaction hash.");
-        return;
-      }
-      try {
-        await loadByTxHash(txHash);
-        setStatus("Loaded from tx hash.");
+        await readAndRenderForUrl(url);
+        setStatus("Done.");
       } catch (e) {
         console.error(e);
         setStatus("Error: " + (e?.message || String(e)));
       }
     };
 
-    // init chain pill
-    try { await refreshChainPill(); } catch {}
+    el("btnLast").onclick = async () => {
+      setStatus("Reading get_last()…");
+      try {
+        const c = await ensureClient();
+        const last = await c.readContract({
+          address: CONTRACT_ADDRESS,
+          functionName: "get_last",
+          args: [],
+        });
+        const raw = last?.result || "";
+        if (!raw) {
+          showParseError("(empty get_last().result)");
+          setStatus("Done.");
+          return;
+        }
+        try {
+          const obj = JSON.parse(raw);
+          showResult(obj, raw);
+        } catch {
+          showParseError(raw);
+        }
+        setStatus("Done.");
+      } catch (e) {
+        console.error(e);
+        setStatus("Error: " + (e?.message || String(e)));
+      }
+    };
+
+    // ---- Tx debug ----
+    el("btnLoadTx").onclick = async () => {
+      const txHash = el("txhash").value.trim();
+      if (!txHash.startsWith("0x")) return alert("Paste a tx hash.");
+      setStatus("Loading transaction object…");
+      try {
+        const c = await ensureClient();
+        const txObj = await c.getTransaction({ hash: txHash });
+        el("txDebug").textContent = JSON.stringify(txObj, null, 2);
+        setStatus("Tx loaded.");
+      } catch (e) {
+        console.error(e);
+        setStatus("Error: " + (e?.message || String(e)));
+      }
+    };
   </script>
 </body>
 </html>
