@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Truth Serum — GenLayer Fact-Checker</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 920px; margin: 32px auto; padding: 0 16px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+      input, textarea { width: 100%; padding: 10px 12px; font-size: 16px; }
+      button { padding: 10px 14px; font-size: 16px; cursor: pointer; }
+      .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin-top: 14px; }
+      .muted { color: #666; font-size: 14px; }
+      pre { white-space: pre-wrap; word-break: break-word; background: #fafafa; border: 1px solid #eee; padding: 12px; border-radius: 10px; }
+      .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <h1>Truth Serum</h1>
+    <p class="muted">
+      Вставь ссылку на новость/пост/статью → контракт в GenLayer подтянет страницу, найдёт исходящие ссылки и вынесет вердикт.
+    </p>
+
+    <div class="card">
+      <div class="row">
+        <button id="btnConnect">Подключить кошелёк</button>
+        <span id="wallet" class="muted">не подключен</span>
+      </div>
+
+      <div style="height: 10px"></div>
+
+      <label class="muted">URL</label>
+      <input id="url" placeholder="https://..." />
+
+      <div style="height: 10px"></div>
+
+      <div class="row">
+        <button id="btnVerify">Проверить (on-chain)</button>
+        <button id="btnRead">Прочитать результат</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+
+    <div id="out" class="card" style="display:none;">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <span class="muted">Вердикт:</span>
+          <span id="verdict" class="badge"></span>
+        </div>
+        <div class="muted" id="tx"></div>
+      </div>
+
+      <h3>Пояснение</h3>
+      <div id="explanation"></div>
+
+      <h3>Источники</h3>
+      <div id="sources"></div>
+
+      <h3>Raw JSON</h3>
+      <pre id="raw"></pre>
+    </div>
+
+    <script type="module">
+      // NOTE: easiest "no-build" imports via esm.sh
+      import { createClient } from "https://esm.sh/genlayer-js";
+      import { studionet } from "https://esm.sh/genlayer-js/chains";
+      import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
+
+      const CONTRACT_ADDRESS = "0x2715f59C9E8AD07c9C788c7f9e3d4e9DccaB6BcD";
+
+      let accountAddress = null;
+      let client = null;
+
+      const el = (id) => document.getElementById(id);
+      const setStatus = (s) => (el("status").textContent = s);
+
+      function renderResult(jsonStr, txHash = "") {
+        el("out").style.display = "block";
+        el("tx").textContent = txHash ? `tx: ${txHash}` : "";
+        el("raw").textContent = jsonStr;
+
+        let obj;
+        try { obj = JSON.parse(jsonStr); } catch {
+          el("verdict").textContent = "Parse error";
+          el("explanation").textContent = "";
+          el("sources").textContent = "";
+          return;
+        }
+
+        el("verdict").textContent = obj.verdict || "";
+        el("explanation").textContent = obj.explanation || "";
+
+        const src = Array.isArray(obj.sources) ? obj.sources : [];
+        el("sources").innerHTML = src.length
+          ? "<ul>" + src.map(s => {
+              const u = (s && s.url) ? s.url : "";
+              const note = (s && s.note) ? s.note : "";
+              const safeU = u.replaceAll('"', "&quot;");
+              return `<li><a href="${safeU}" target="_blank" rel="noreferrer">${u}</a> <span class="muted">— ${note}</span></li>`;
+            }).join("") + "</ul>"
+          : "<span class='muted'>нет</span>";
+      }
+
+      async function ensureClient() {
+        if (!client) {
+          client = createClient({
+            chain: studionet,
+            // For MetaMask-style signing, the SDK docs say you can provide just the address.
+            // The wallet handles signing.
+            account: accountAddress ?? undefined,
+          });
+          await client.initializeConsensusSmartContract();
+        }
+        return client;
+      }
+
+      el("btnConnect").onclick = async () => {
+        if (!window.ethereum) {
+          alert("Нужен кошелёк (например, MetaMask).");
+          return;
+        }
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        accountAddress = accounts?.[0] || null;
+        el("wallet").textContent = accountAddress ? accountAddress : "не подключен";
+
+        // rebuild client with account
+        client = null;
+        await ensureClient();
+        setStatus("Кошелёк подключен");
+      };
+
+      el("btnVerify").onclick = async () => {
+        const url = el("url").value.trim();
+        if (!url) return;
+
+        setStatus("Отправляю транзакцию verify(...) ...");
+        const c = await ensureClient();
+
+        try {
+          const txHash = await c.writeContract({
+            address: CONTRACT_ADDRESS,
+            functionName: "verify",
+            args: [url],
+            value: 0n,
+          });
+
+          setStatus("Жду ACCEPTED ...");
+          await c.waitForTransactionReceipt({
+            hash: txHash,
+            status: TransactionStatus.ACCEPTED,
+            retries: 80,
+            interval: 5000,
+          });
+
+          setStatus("Готово. Читаю результат ...");
+          const res = await c.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: "get",
+            args: [url],
+          });
+
+          renderResult(res, txHash);
+          setStatus("OK");
+        } catch (e) {
+          console.error(e);
+          setStatus("Ошибка: " + (e?.message || String(e)));
+        }
+      };
+
+      el("btnRead").onclick = async () => {
+        const url = el("url").value.trim();
+        if (!url) return;
+
+        setStatus("Читаю get(url) ...");
+        const c = await ensureClient();
+
+        try {
+          const res = await c.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: "get",
+            args: [url],
+          });
+
+          if (!res) {
+            setStatus("Пусто (ещё не проверяли этот URL)");
+            return;
+          }
+          renderResult(res);
+          setStatus("OK");
+        } catch (e) {
+          console.error(e);
+          setStatus("Ошибка: " + (e?.message || String(e)));
+        }
+      };
+    </script>
+  </body>
+</html>
