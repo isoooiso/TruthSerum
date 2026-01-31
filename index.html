@@ -5,127 +5,81 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Truth Serum — Decentralized Fact Checker</title>
   <style>
-    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; max-width: 980px; margin: 28px auto; padding: 0 16px; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    .card { border:1px solid #ddd; border-radius:14px; padding:14px; margin-top:14px; }
-    label { font-size: 13px; color:#555; display:block; margin: 10px 0 6px; }
-    input, textarea { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #ddd; border-radius: 10px; }
-    textarea { min-height: 110px; }
-    button { padding: 10px 14px; font-size: 15px; cursor:pointer; border-radius: 10px; border:1px solid #ddd; background:#fff; }
-    .muted { color:#666; font-size:13px; }
-    .pill { display:inline-block; padding:4px 10px; border:1px solid #ddd; border-radius:999px; font-size:13px; }
-    pre { white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; padding:12px; border-radius:12px; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-    @media (max-width: 860px){ .grid { grid-template-columns: 1fr; } }
-    .ok { border-color:#0a0; }
-    .warn { border-color:#f90; }
-    .bad { border-color:#d00; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;max-width:980px;margin:28px auto;padding:0 16px}
+    .card{border:1px solid #ddd;border-radius:14px;padding:14px;margin-top:14px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    input,textarea{width:100%;padding:10px 12px;font-size:15px;border:1px solid #ddd;border-radius:10px}
+    button{padding:10px 14px;font-size:15px;cursor:pointer;border-radius:10px;border:1px solid #ddd;background:#fff}
+    .muted{color:#666;font-size:13px}
+    .pill{display:inline-block;padding:4px 10px;border:1px solid #ddd;border-radius:999px;font-size:13px}
+    pre{white-space:pre-wrap;word-break:break-word;background:#fafafa;border:1px solid #eee;padding:12px;border-radius:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width: 860px){ .grid{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
   <h1>Truth Serum</h1>
   <p class="muted">
-    Paste a link (news/tweet/article). The contract fetches the page, extracts candidate sources,
-    and returns: <b>True / False / Misleading / Not enough data</b> + explanation + sources.
+    Paste a link → on-chain fact check → verdict + explanation + sources.
   </p>
 
   <div class="card">
-    <h3 style="margin:0 0 6px;">Wallet (Burner)</h3>
-    <p class="muted" style="margin-top:0;">
-      This demo uses a local signing wallet via GenLayerJS <code>createAccount()</code>.
-      (MetaMask integration is still under development in the SDK.) :contentReference[oaicite:4]{index=4}
-    </p>
-
-    <div class="grid">
-      <div>
-        <div class="row">
-          <button id="btnCreate">Create New Wallet</button>
-          <button id="btnForget">Forget Wallet</button>
-        </div>
-
-        <label>Private key (stored in localStorage!)</label>
-        <input id="pk" placeholder="0x..." />
-
-        <div class="row" style="margin-top:10px;">
-          <button id="btnImport">Import / Use This Key</button>
-          <span class="muted" id="walletStatus">No wallet loaded</span>
-        </div>
-
-        <label>Address</label>
-        <input id="addr" readonly />
-      </div>
-
-      <div>
-        <div class="card" style="margin-top:0;">
-          <div class="muted">
-            RPC endpoint (StudioNet):
-            <div><code>https://studio.genlayer.com/api</code></div>
-            <div style="margin-top:6px;">
-              If transactions fail with “insufficient funds”, send some test GEN to your address on StudioNet.
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="row">
+      <button id="btnConnect">Connect MetaMask</button>
+      <span id="wallet" class="muted">Not connected</span>
+      <span class="pill" id="chain">Chain: —</span>
     </div>
-  </div>
 
-  <div class="card">
-    <h3 style="margin:0 0 6px;">Run a Fact Check</h3>
-
-    <label>URL</label>
+    <label class="muted" style="display:block;margin-top:12px;">URL</label>
     <input id="url" placeholder="https://..." />
 
-    <div class="row" style="margin-top:10px;">
+    <div class="row" style="margin-top:12px;">
       <button id="btnVerify">Verify (on-chain)</button>
-      <button id="btnRead">Read stored result</button>
-      <button id="btnLast">Get last result</button>
+      <button id="btnGet">Get(url)</button>
+      <button id="btnLast">Get last</button>
     </div>
 
     <div class="muted" id="status" style="margin-top:10px;">—</div>
 
-    <label style="margin-top:12px;">Tx hash</label>
+    <label class="muted" style="display:block;margin-top:12px;">Tx hash</label>
     <input id="txhash" placeholder="0x..." />
-    <div class="row" style="margin-top:10px;">
-      <button id="btnLoadTx">Load tx debug</button>
-    </div>
   </div>
 
   <div class="card" id="out" style="display:none;">
     <div class="row" style="justify-content:space-between;">
-      <div class="row">
-        <span class="pill" id="verdictPill">Verdict: —</span>
-      </div>
-      <span class="muted" id="txLine"></span>
+      <span class="pill" id="verdict">Verdict: —</span>
+      <span class="muted" id="txline">—</span>
     </div>
 
-    <h3 style="margin:12px 0 6px;">Explanation</h3>
+    <h3>Explanation</h3>
     <div id="explanation" class="muted">—</div>
 
-    <h3 style="margin:12px 0 6px;">Sources</h3>
+    <h3>Sources</h3>
     <div id="sources" class="muted">—</div>
 
-    <h3 style="margin:12px 0 6px;">Key claims</h3>
+    <h3>Key claims</h3>
     <div id="claims" class="muted">—</div>
 
     <details style="margin-top:10px;">
-      <summary>Raw JSON (contract return)</summary>
+      <summary>Raw JSON</summary>
       <pre id="raw">—</pre>
     </details>
 
     <details style="margin-top:10px;">
-      <summary>Debug: Transaction object</summary>
-      <pre id="txDebug">—</pre>
+      <summary>Debug: transaction object</summary>
+      <pre id="txdebug">—</pre>
     </details>
   </div>
 
   <script type="module">
-    import { createClient, createAccount, generatePrivateKey } from "https://esm.sh/genlayer-js";
+    import { createClient } from "https://esm.sh/genlayer-js";
     import { studionet } from "https://esm.sh/genlayer-js/chains";
     import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
     // === SET THIS ===
-    const CONTRACT_ADDRESS = "0x2715f59C9E8AD07c9C788c7f9e3d4e9DccaB6BcD";
+    const CONTRACT_ADDRESS = "0xPASTE_YOUR_CONTRACT_ADDRESS_HERE";
 
+    // Studio RPC
     const RPC_ENDPOINT = "https://studio.genlayer.com/api";
 
     const el = (id) => document.getElementById(id);
@@ -134,195 +88,187 @@
     let account = null;
     let client = null;
 
-    function savePk(pk) { localStorage.setItem("truthserum_pk", pk); }
-    function loadPk() { return localStorage.getItem("truthserum_pk"); }
-    function clearPk() { localStorage.removeItem("truthserum_pk"); }
+    // --- Provider shim: implements eth_fillTransaction locally if missing ---
+    function wrapProvider(provider) {
+      return {
+        ...provider,
+        request: async ({ method, params }) => {
+          if (method === "eth_fillTransaction") {
+            // params[0] is an unsigned tx object. Fill nonce/gas/gasPrice if missing.
+            const tx = { ...(params?.[0] || {}) };
+
+            // ensure from
+            if (!tx.from) {
+              const accs = await provider.request({ method: "eth_accounts", params: [] });
+              tx.from = accs?.[0];
+            }
+
+            // nonce
+            if (tx.nonce == null) {
+              const nonce = await provider.request({
+                method: "eth_getTransactionCount",
+                params: [tx.from, "pending"]
+              });
+              tx.nonce = nonce;
+            }
+
+            // gas
+            if (tx.gas == null) {
+              try {
+                const gas = await provider.request({
+                  method: "eth_estimateGas",
+                  params: [tx]
+                });
+                tx.gas = gas;
+              } catch {
+                // fallback: leave it; MetaMask may still handle
+              }
+            }
+
+            // gas price (legacy) if EIP-1559 fields are missing
+            if (tx.gasPrice == null && tx.maxFeePerGas == null && tx.maxPriorityFeePerGas == null) {
+              try {
+                const gp = await provider.request({ method: "eth_gasPrice", params: [] });
+                tx.gasPrice = gp;
+              } catch {
+                // ignore
+              }
+            }
+
+            return tx;
+          }
+
+          return provider.request({ method, params });
+        }
+      };
+    }
+
+    async function refreshChain() {
+      try {
+        const chainId = await window.ethereum.request({ method: "eth_chainId" });
+        el("chain").textContent = `Chain: ${chainId}`;
+      } catch {
+        el("chain").textContent = "Chain: —";
+      }
+    }
 
     async function ensureClient() {
-      if (!account) throw new Error("No wallet loaded");
+      if (!account) throw new Error("Connect MetaMask first.");
       if (!client) {
-        // createClient supports custom endpoint & signing account :contentReference[oaicite:5]{index=5}
+        // IMPORTANT:
+        // Docs: passing address string enables external signing (MetaMask). :contentReference[oaicite:3]{index=3}
         client = createClient({
           chain: studionet,
           endpoint: RPC_ENDPOINT,
-          account,
+          account: account
         });
         await client.initializeConsensusSmartContract();
       }
       return client;
     }
 
-    function showResult(obj, raw, txHash = "") {
+    function render(raw, txHash = "") {
       el("out").style.display = "block";
       el("raw").textContent = raw || "—";
-      el("txLine").textContent = txHash ? `tx: ${txHash}` : "";
+      el("txline").textContent = txHash ? `tx: ${txHash}` : "—";
 
-      const verdict = obj?.verdict ?? "—";
-      el("verdictPill").textContent = `Verdict: ${verdict}`;
+      try {
+        const obj = JSON.parse(raw);
 
-      // color hint
-      el("verdictPill").classList.remove("ok","warn","bad");
-      const v = String(verdict).toLowerCase();
-      if (v === "true") el("verdictPill").classList.add("ok");
-      else if (v === "false") el("verdictPill").classList.add("bad");
-      else if (v === "misleading") el("verdictPill").classList.add("warn");
+        el("verdict").textContent = `Verdict: ${obj.verdict ?? "—"}`;
+        el("explanation").textContent = obj.explanation ?? "—";
 
-      el("explanation").textContent = obj?.explanation ?? "—";
+        const sources = Array.isArray(obj.sources) ? obj.sources : [];
+        el("sources").innerHTML = sources.length
+          ? "<ul>" + sources.map(s => {
+              const u = (s && s.url) ? s.url : "";
+              const note = (s && s.note) ? s.note : "";
+              const safeU = u.replaceAll('"', "&quot;");
+              return `<li><a href="${safeU}" target="_blank" rel="noreferrer">${u}</a> <span class="muted">— ${note}</span></li>`;
+            }).join("") + "</ul>"
+          : "(no sources)";
 
-      const sources = Array.isArray(obj?.sources) ? obj.sources : [];
-      el("sources").innerHTML = sources.length
-        ? "<ul>" + sources.map(s => {
-            const u = (s && s.url) ? s.url : "";
-            const note = (s && s.note) ? s.note : "";
-            const safeU = u.replaceAll('"', "&quot;");
-            return `<li><a href="${safeU}" target="_blank" rel="noreferrer">${u}</a> <span class="muted">— ${note}</span></li>`;
-          }).join("") + "</ul>"
-        : "<span class='muted'>(no sources)</span>";
-
-      const claims = Array.isArray(obj?.key_claims) ? obj.key_claims : [];
-      el("claims").innerHTML = claims.length
-        ? "<ol>" + claims.map(c => `<li>${String(c)}</li>`).join("") + "</ol>"
-        : "<span class='muted'>(no claims)</span>";
+        const claims = Array.isArray(obj.key_claims) ? obj.key_claims : [];
+        el("claims").innerHTML = claims.length
+          ? "<ol>" + claims.map(c => `<li>${String(c)}</li>`).join("") + "</ol>"
+          : "(no claims)";
+      } catch {
+        el("verdict").textContent = "Verdict: Parse error";
+        el("explanation").textContent = "Contract output is not valid JSON. See Raw JSON.";
+        el("sources").textContent = "—";
+        el("claims").textContent = "—";
+      }
     }
 
-    function showParseError(raw, txHash = "") {
-      el("out").style.display = "block";
-      el("verdictPill").textContent = "Verdict: Parse error";
-      el("explanation").textContent = "Contract output was not valid JSON. See Raw JSON below.";
-      el("sources").textContent = "—";
-      el("claims").textContent = "—";
-      el("raw").textContent = raw || "(empty)";
-      el("txLine").textContent = txHash ? `tx: ${txHash}` : "";
-    }
+    el("btnConnect").onclick = async () => {
+      if (!window.ethereum) return alert("MetaMask is required.");
 
-    // ---- Wallet UI ----
-    function refreshWalletUI() {
-      el("addr").value = account?.address || "";
-      el("walletStatus").textContent = account ? "Wallet loaded" : "No wallet loaded";
-    }
+      // install shim BEFORE anything else touches provider
+      window.ethereum = wrapProvider(window.ethereum);
 
-    el("btnCreate").onclick = () => {
-      const pk = generatePrivateKey();
-      el("pk").value = pk;
-      savePk(pk);
-      account = createAccount(pk);
+      const accs = await window.ethereum.request({ method: "eth_requestAccounts", params: [] });
+      account = accs?.[0] || null;
+      el("wallet").textContent = account || "Not connected";
+
       client = null;
-      refreshWalletUI();
-      setStatus("New wallet created and stored in localStorage.");
+      await refreshChain();
+      await ensureClient();
+
+      setStatus("Connected.");
     };
-
-    el("btnImport").onclick = () => {
-      const pk = el("pk").value.trim();
-      if (!pk.startsWith("0x") || pk.length < 10) {
-        alert("Please paste a valid hex private key starting with 0x");
-        return;
-      }
-      savePk(pk);
-      account = createAccount(pk);
-      client = null;
-      refreshWalletUI();
-      setStatus("Wallet imported and stored in localStorage.");
-    };
-
-    el("btnForget").onclick = () => {
-      clearPk();
-      account = null;
-      client = null;
-      refreshWalletUI();
-      setStatus("Wallet cleared.");
-    };
-
-    // Auto-load saved wallet
-    (() => {
-      const pk = loadPk();
-      if (pk) {
-        el("pk").value = pk;
-        account = createAccount(pk);
-        refreshWalletUI();
-        setStatus("Loaded wallet from localStorage.");
-      }
-    })();
-
-    // ---- Contract actions ----
-    async function readAndRenderForUrl(url, txHash = "") {
-      const c = await ensureClient();
-
-      // 1) Try get(url)
-      const raw = await c.readContract({
-        address: CONTRACT_ADDRESS,
-        functionName: "get",
-        args: [url],
-      });
-
-      if (raw && String(raw).trim().length) {
-        try {
-          const obj = JSON.parse(raw);
-          showResult(obj, raw, txHash);
-          return;
-        } catch {
-          showParseError(raw, txHash);
-          return;
-        }
-      }
-
-      // 2) Fallback: get_last()
-      const last = await c.readContract({
-        address: CONTRACT_ADDRESS,
-        functionName: "get_last",
-        args: [],
-      });
-
-      const lastRaw = last?.result || "";
-      if (lastRaw && String(lastRaw).trim().length) {
-        try {
-          const obj = JSON.parse(lastRaw);
-          showResult(obj, lastRaw, txHash);
-          return;
-        } catch {
-          showParseError(lastRaw, txHash);
-          return;
-        }
-      }
-
-      showParseError("(empty result from get(url) and get_last())", txHash);
-    }
 
     el("btnVerify").onclick = async () => {
       const url = el("url").value.trim();
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        alert("Please enter a valid URL starting with http:// or https://");
-        return;
+        return alert("Please enter a valid http/https URL.");
       }
-      if (!CONTRACT_ADDRESS.startsWith("0x")) {
-        alert("Set CONTRACT_ADDRESS in the HTML file.");
-        return;
-      }
-
-      setStatus("Submitting verify(url) transaction…");
+      setStatus("Submitting verify(url)…");
       const c = await ensureClient();
 
       try {
-        // Your contract signature is verify(url: str) -> str (ONE argument)
         const txHash = await c.writeContract({
           address: CONTRACT_ADDRESS,
           functionName: "verify",
           args: [url],
-          value: 0n,
+          value: 0n
         });
 
         el("txhash").value = txHash;
 
+        // Wait for FINALIZED for stable read :contentReference[oaicite:4]{index=4}
         setStatus("Waiting for FINALIZED…");
         await c.waitForTransactionReceipt({
           hash: txHash,
           status: TransactionStatus.FINALIZED,
           retries: 200,
-          interval: 3000,
-          fullTransaction: false,
+          interval: 3000
         });
 
-        setStatus("FINALIZED. Reading stored result…");
-        await readAndRenderForUrl(url, txHash);
+        setStatus("FINALIZED. Reading get(url)…");
+        const res = await c.readContract({
+          address: CONTRACT_ADDRESS,
+          functionName: "get",
+          args: [url]
+        });
+
+        // If key mismatch, fallback to get_last
+        if (!res || String(res).trim() === "") {
+          const last = await c.readContract({
+            address: CONTRACT_ADDRESS,
+            functionName: "get_last",
+            args: []
+          });
+          const lastRaw = last?.result || "";
+          render(lastRaw, txHash);
+        } else {
+          render(res, txHash);
+        }
+
+        // Debug tx object
+        try {
+          const txObj = await c.getTransaction({ hash: txHash });
+          el("txdebug").textContent = JSON.stringify(txObj, null, 2);
+        } catch {}
 
         setStatus("Done.");
       } catch (e) {
@@ -331,12 +277,18 @@
       }
     };
 
-    el("btnRead").onclick = async () => {
+    el("btnGet").onclick = async () => {
       const url = el("url").value.trim();
-      if (!url) return alert("Enter a URL first.");
+      if (!url) return;
       setStatus("Reading get(url)…");
       try {
-        await readAndRenderForUrl(url);
+        const c = await ensureClient();
+        const res = await c.readContract({
+          address: CONTRACT_ADDRESS,
+          functionName: "get",
+          args: [url]
+        });
+        render(res || "");
         setStatus("Done.");
       } catch (e) {
         console.error(e);
@@ -351,20 +303,10 @@
         const last = await c.readContract({
           address: CONTRACT_ADDRESS,
           functionName: "get_last",
-          args: [],
+          args: []
         });
         const raw = last?.result || "";
-        if (!raw) {
-          showParseError("(empty get_last().result)");
-          setStatus("Done.");
-          return;
-        }
-        try {
-          const obj = JSON.parse(raw);
-          showResult(obj, raw);
-        } catch {
-          showParseError(raw);
-        }
+        render(raw || "");
         setStatus("Done.");
       } catch (e) {
         console.error(e);
@@ -372,21 +314,7 @@
       }
     };
 
-    // ---- Tx debug ----
-    el("btnLoadTx").onclick = async () => {
-      const txHash = el("txhash").value.trim();
-      if (!txHash.startsWith("0x")) return alert("Paste a tx hash.");
-      setStatus("Loading transaction object…");
-      try {
-        const c = await ensureClient();
-        const txObj = await c.getTransaction({ hash: txHash });
-        el("txDebug").textContent = JSON.stringify(txObj, null, 2);
-        setStatus("Tx loaded.");
-      } catch (e) {
-        console.error(e);
-        setStatus("Error: " + (e?.message || String(e)));
-      }
-    };
+    try { await refreshChain(); } catch {}
   </script>
 </body>
 </html>
